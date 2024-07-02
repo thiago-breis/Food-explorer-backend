@@ -1,197 +1,54 @@
-const knex = require("../database/knex");
-const DiskStorage = require("../providers/DiskStorage");
+const FavoritesRepository = require('../repositories/FavoritesRepository')
+const FavoritesService = require('../services/FavoritesService')
 
-class DishesController{
+class FavoritesController {
+    async create(request, response) {
+        const { id } = request.body
+        const user_id = request.user.id
 
-  async create(request, response){
+        const favoritesRepository = new FavoritesRepository()
+        const favoritesService = new FavoritesService(favoritesRepository)
 
-    const { name, price, description, ingredients, categorie_id } = request.body;
-    const imageDishFilename = request.file.filename;
-    const user_id = request.user.id; 
+        await favoritesService.create({ user_id, dish_id: id })
 
-    const ingredientsArray = ingredients.split(',');
-
-    const diskStorage = new DiskStorage(); 
-
-    const user = await knex("users")
-      .where({id: user_id}).first();
-
-    if(!user){
-      throw new AppError("Somente usuários autenticados podem cadastrar pratos!", 401)
+        response.status(200).json()
     }
 
-    const filename = await diskStorage.saveFile(imageDishFilename);
+    async show(request, response) {
+        const { id } = request.params
+        const user_id = request.user.id
 
-    //first insert dish
-    const [ dish_id ] = await knex("dishes").insert({
-      name,
-      price,
-      description,
-      image: filename, 
-      categorie_id,
-      user_id
-    });
+        const favoritesRepository = new FavoritesRepository()
+        const favoritesService = new FavoritesService(favoritesRepository)
 
-    //after insert ingredients array
-    const ingredientsInsert = ingredientsArray.map(ingredient => {
-      return {
-        dish_id,
-        user_id,
-        name: ingredient
-      };
-    });
+        const favorites = await favoritesService.show({ user_id, dish_id: id })
 
-    await knex("ingredients").insert(ingredientsInsert);
-
-    const commonDish = {
-      dish_id,
-      user_id
+        response.status(200).json(favorites)
     }
 
-    await knex("create_common_dish").insert(commonDish);
+    async index(request, response) {
+        const { title, ingredients } = request.query
+        const user_id = request.user.id
 
-    return response.status(201).json('Dish created with success!');
-  }
+        const favoritesRepository = new FavoritesRepository()
+        const favoritesService = new FavoritesService(favoritesRepository)
 
-  async update(request, response){
-    
-    const { name, price, description, categorie_id, ingredients } = request.body;
-    const { id } = request.params;
-    const { id: user_id } = request.user;
-    
-    const imageDishFilename = request.file?.filename
-    const parsedIngredients = JSON.parse(ingredients);
+        const favorites = await favoritesService.index({ user_id, title, ingredients })
 
-    const diskStorage = new DiskStorage();
-
-    if (imageDishFilename) {
-      var filename = await diskStorage.saveFile(imageDishFilename);
-    } else {
-      console.error('O filename é undefined');
-    }
-    
-    const ingredientsUpdate = parsedIngredients.map(ingredient => {
-      return {
-        name: ingredient.name,
-        user_id,
-        dish_id: id
-      };
-    });
-
-    (async function replaceIngredients() {
-
-      //exclusão de todos os ingredients
-      await knex('ingredients')
-          .where('dish_id', id)
-          .del();
-
-      //inserção novamente
-      await knex('ingredients')
-      .insert(ingredientsUpdate);
-
-    })();
-
-
-    await knex("dishes").update({
-      name,
-      image: filename,
-      price,
-      categorie_id,
-      description,
-    }).where({id});
-
-    return response.json();
-  }
-
-  //método para mostrar um dish somente e seus ingredientes
-  async show(request, response){
-    try {
-      const { id } = request.params;
-
-      const dish = await knex('create_common_dish as a')
-      .select(
-        'a.id',
-        'a.orders',
-        'a.dish_id',
-        'b.name',
-        'b.image',
-        'b.price',
-        'b.categorie_id',
-        'b.description'
-      )
-      .innerJoin('dishes as b', 'a.dish_id', 'b.id')
-      .where('b.id', id)
-      .first();
-
-      if (!dish) {
-          return response.status(404).json({ error: "Dish not found" });
-      }
-
-      const ingredients = await knex("ingredients").where({ dish_id: id }).orderBy("name");
-
-      return response.json({
-          dish,
-          ingredients
-      });
-
-      
-    } catch (error) {
-      console.error(error);
-      return response.status(500).json({ error: "Internal Server Error" });
+        response.status(200).json(favorites)
     }
 
-  }
+    async delete(request, response) {
+        const { id } = request.params
+        const user_id = request.user.id
 
-  //deletar dishes e ingredients em cascata
-  async delete(request, response){
-    const { id } = request.params;
+        const favoritesRepository = new FavoritesRepository()
+        const favoritesService = new FavoritesService(favoritesRepository)
 
-    await knex("dishes").where({ id }).delete();
+        const deleted = await favoritesService.delete({ user_id, dish_id: id })
 
-    console.log('Deletado');
-
-    return response.json();
-  }
-
-  //tras os pratos e seus ingrdientes para o usuário autenticado
-  async index(request, response) { 
-    const { name } = request.query; 
-
-    let dishes;
-  
-    dishes = await knex('dishes as a')
-    .select(
-      'a.id', 
-      'a.name', 
-      'a.image', 
-      'a.price', 
-      'a.description', 
-      'a.categorie_id', 
-      'c.isLiked', 
-      'c.orders',
-      'b.id as ingredient_id', 
-      'b.name as ingredient_name'
-    )
-    .where(function() {
-      this.where('a.name', 'like', `%${name}%`)
-        .orWhere('b.name', 'like', `%${name}%`);
-    })
-    .leftJoin('ingredients as b', 'a.id', 'b.dish_id')
-    .leftJoin('create_common_dish as c', 'a.id', 'c.dish_id')
-
-    function removeDuplicates(arr) {
-      const seen = new Set();
-      return arr.filter(obj => {
-          const duplicate = seen.has(obj.id);
-          seen.add(obj.id);
-          return !duplicate;
-      });
+        response.status(204).json(deleted)
     }
-
-    let uniqueDishes = removeDuplicates(dishes);
-    return response.json(uniqueDishes);
-  }
-
 }
 
-module.exports = DishesController;
+module.exports = FavoritesController

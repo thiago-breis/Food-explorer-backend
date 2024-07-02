@@ -1,19 +1,18 @@
-const { Router } = require("express");
+const { Router } = require('express')
 
-const usersRoutes = require("./users.routes");
-const dishesRoutes = require("./dishes.routes");
-const sessionsRoutes = require("./sessions.routes");
-const ingredientsRoutes = require("./ingredients.routes");
-const categoriesRoutes = require("./categories.routes");
-const commonDishesOrdersRoutes = require("./commonDishesOrders.routes");
+const usersRouter = require('./users.routes')
+const sessionsRouter = require('./sessions.routes')
+const dishesRouter = require('./dishes.routes')
+const ordersRoutes = require('./orders.routes')
+const favoritesRoutes = require('./favorites.routes')
+const cartsRoutes = require('./carts.routes')
+const routes = Router()
 
-const routes = Router();
+routes.use('/users', usersRouter)
+routes.use('/sessions', sessionsRouter)
+routes.use('/dishes', dishesRouter)
+routes.use('/orders', ordersRoutes)
+routes.use('/favorites', favoritesRoutes)
+routes.use('/carts', cartsRoutes)
 
-routes.use("/users", usersRoutes)
-routes.use("/dishes", dishesRoutes)
-routes.use("/sessions", sessionsRoutes)
-routes.use("/dish/ingredients", ingredientsRoutes)
-routes.use("/dish/categories", categoriesRoutes)
-routes.use("/dish/commonDishesOrders", commonDishesOrdersRoutes)
-
-module.exports = routes;
+module.exports = routes

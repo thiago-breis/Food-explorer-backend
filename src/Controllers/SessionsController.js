@@ -1,53 +1,30 @@
-const AppError = require("../utils/appError");
-const authConfig = require("../configs/auth");
-const knex = require("../database/knex");
-const { sign } = require("jsonwebtoken");
-const {compare} = require("bcryptjs");
+const UsersRepository = require('../repositories/UsersRepository')
+const UsersService = require('../services/UsersService')
 
-class SessionsController {
-  async create(request, response){
-    try{
-      const { email, password } = request.body;
+class UsersController {
+    async create(request, response) {
+        const { name, email, password } = request.body
 
-      const user = await knex("users")
-      .where({ email })
-      .first();
+        const usersRepository = new UsersRepository()
+        const usersService = new UsersService(usersRepository)
 
-      if(!user){
-        throw new AppError("E-mail e/ou senha incorreta", 401);
-      }
+        await usersService.create({ name, email, password })
 
-      const passwordMatched = await compare(password, user.password);
-
-      if(!passwordMatched){
-        throw new AppError("E-mail e/ou senha incorreta", 401);
-      }
-
-      const { secret, expiresIn } = authConfig.jwt;
-
-      const token = sign({}, secret, {
-        subject: String(user.id),
-        expiresIn
-      })
-
-      return response.json({ user, token })
-
-    }catch(error){
-
-      console.log(error);
-      return response.status(403).json({error:error.message})
-
+        response.status(201).json()
     }
-  }
+
+    async update(request, response) {
+        const { name, email, password, oldPassword } = request.body
+        const user_id = request.user.id
+
+        const usersRepository = new UsersRepository()
+        const usersService = new UsersService(usersRepository)
+
+        await usersService.update({ id: user_id, name, email, password, oldPassword })
+
+        response.status(200).json()
+    }
 
 }
 
-module.exports = SessionsController;
-
-
-//Com o jsonwebtoken é possível usar seu métodos "sign"
-//parâmetros : ({}, secret, {subject: id, expiresIn});
-// const token = sign({}, secret, {
-//   subject: String(user.id),
-//   expiresIn
-// })
+module.exports = UsersController
